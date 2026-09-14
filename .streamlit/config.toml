@@ -1,6 +1,14 @@
+[server]
+# Streamlit walks imported packages and probes transformers vision modules,
+# which then fail on missing torchvision. This app only uses text embeddings.
+fileWatcherType = "none"
+
 [theme]
-primaryColor = "#4CAF50"
-backgroundColor = "#1E1E1E"
-secondaryBackgroundColor = "#252526"
-textColor = "#FFFFFF"
+primaryColor = "#10a37f"
+backgroundColor = "#212121"
+secondaryBackgroundColor = "#171717"
+textColor = "#ececec"
 font = "sans serif"
+
+[browser]
+gatherUsageStats = false

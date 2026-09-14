@@ -1,93 +1,109 @@
 import os
-from typing import Any, Dict
+from typing import Any, Dict, Iterator, List
 
+import torch
 from dotenv import load_dotenv
-from langchain.agents import create_agent
 from langchain.chat_models import init_chat_model
-from langchain.messages import ToolMessage
-from langchain.tools import tool
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_pinecone import PineconeVectorStore
 
 load_dotenv()
+os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 
-# Initialize embeddings (same as ingestion.py)
-embeddings = HuggingFaceEmbeddings(
-    model_name="sentence-transformers/all-MiniLM-L6-v2",
+
+def _embedding_device() -> str:
+    if torch.backends.mps.is_available():
+        return "mps"
+    if torch.cuda.is_available():
+        return "cuda"
+    return "cpu"
+
+
+embedding = HuggingFaceEmbeddings(
+    model_name="BAAI/bge-large-en-v1.5",
+    model_kwargs={"device": _embedding_device()},
+    encode_kwargs={"normalize_embeddings": True, "batch_size": 8},
 )
-
-# Initialize vector store
 vectorstore = PineconeVectorStore(
     index_name=os.getenv("INDEX_NAME", "documentation-helper"),
-    embedding=embeddings,
+    embedding=embedding,
 )
-# Initialize chat model
-model = init_chat_model("gpt-5.2", model_provider="openai")
+retriever = vectorstore.as_retriever(search_kwargs={"k": 6})
+model = init_chat_model(
+    "openai/gpt-oss-20b",
+    model_provider="groq",
+    max_tokens=512,
+    max_retries=3,
+    reasoning_effort="low",
+)
+
+MAX_CHARS_PER_DOC = 2500
+BGE_QUERY_PREFIX = (
+    "Represent this sentence for searching relevant passages: "
+)
+SYSTEM_PROMPT = (
+    "You are a helpful assistant for LangChain documentation. "
+    "Use the retrieved context to answer. Combine related snippets into a clear explanation. "
+    "If the context is only partly relevant, still answer what you can from it and cite sources. "
+    "Say you don't know only if the context is unrelated to the question."
+)
 
 
-@tool(response_format="content_and_artifact")
-def retrieve_context(query: str):
-    """Retrieve relevant documentation to help answer user queries about LangChain."""
-    # Retrieve top 4 most similar documents
-    retrieved_docs = vectorstore.as_retriever().invoke(query, k=4)
-    
-    # Serialize documents for the model
-    serialized = "\n\n".join(
-        (f"Source: {doc.metadata.get('source', 'Unknown')}\n\nContent: {doc.page_content}")
-        for doc in retrieved_docs
+def _format_context(docs: List[Any]) -> str:
+    return "\n\n".join(
+        (
+            f"Source: {doc.metadata.get('source', 'Unknown')}\n"
+            f"Content: {(doc.page_content or '')[:MAX_CHARS_PER_DOC]}"
+        )
+        for doc in docs
     )
-    
-    # Return both serialized content and raw documents
-    return serialized, retrieved_docs
+
+
+def retrieve_docs(query: str) -> List[Any]:
+    return retriever.invoke(f"{BGE_QUERY_PREFIX}{query}")
+
+
+def _messages(query: str, docs: List[Any]) -> List[Dict[str, str]]:
+    return [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {
+            "role": "user",
+            "content": f"Context:\n{_format_context(docs)}\n\nQuestion: {query}",
+        },
+    ]
+
+
+def _chunk_text(content: Any) -> str:
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = []
+        for item in content:
+            if isinstance(item, str):
+                parts.append(item)
+            elif isinstance(item, dict) and item.get("type") == "text":
+                parts.append(item.get("text") or "")
+        return "".join(parts)
+    return ""
+
+
+def stream_answer(query: str, docs: List[Any]) -> Iterator[str]:
+    for chunk in model.stream(_messages(query, docs)):
+        text = _chunk_text(getattr(chunk, "content", ""))
+        if text:
+            yield text
 
 
 def run_llm(query: str) -> Dict[str, Any]:
-    """
-    Run the RAG pipeline to answer a query using retrieved documentation.
-    
-    Args:
-        query: The user's question
-        
-    Returns:
-        Dictionary containing:
-            - answer: The generated answer
-            - context: List of retrieved documents
-    """
-    # Create the agent with retrieval tool
-    system_prompt = (
-        "You are a helpful AI assistant that answers questions about LangChain documentation. "
-        "You have access to a tool that retrieves relevant documentation. "
-        "Use the tool to find relevant information before answering questions. "
-        "Always cite the sources you use in your answers. "
-        "If you cannot find the answer in the retrieved documentation, say so."
-    )
-    
-    agent = create_agent(model, tools=[retrieve_context], system_prompt=system_prompt)
-    
-    # Build messages list
-    messages = [{"role": "user", "content": query}]
-    
-    # Invoke the agent
-    response = agent.invoke({"messages": messages})
-    
-    # Extract the answer from the last AI message
-    answer = response["messages"][-1].content
-    
-    # Extract context documents from ToolMessage artifacts
-    context_docs = []
-    for message in response["messages"]:
-        # Check if this is a ToolMessage with artifact
-        if isinstance(message, ToolMessage) and hasattr(message, "artifact"):
-            # The artifact should contain the list of Document objects
-            if isinstance(message.artifact, list):
-                context_docs.extend(message.artifact)
-    
+    """Retrieve docs, then answer in a single Groq call."""
+    retrieved_docs = retrieve_docs(query)
+    answer = "".join(stream_answer(query, retrieved_docs))
     return {
         "answer": answer,
-        "context": context_docs
+        "context": retrieved_docs,
     }
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     result = run_llm(query="what are deep agents?")
     print(result)
-    

@@ -29,6 +29,7 @@ langchain-tavily = "*"
 langchain-pinecone = "*"
 langchain_huggingface= "*"
 sentence-transformers = "*"
+langchain-groq = "*"
 
 [dev-packages]
 ipykernel = "*"

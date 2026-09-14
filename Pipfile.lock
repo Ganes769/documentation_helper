@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "724a57e6a1ba41e1868da104ba3567b3b3a71391c689c79e029d3ceab814fcc9"
+            "sha256": "3c9c9f2ba32b939d6f8ccdb7266a2ebe3ab88fc24c6d9884ba14ed61585bb925"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -908,6 +908,14 @@
             "markers": "python_version >= '3.10'",
             "version": "==1.75.3"
         },
+        "groq": {
+            "hashes": [
+                "sha256:7353d6dfb60834fd7aacbb86af106e2dc2aeaff6d0edd65fb2fd0f16bd39314c",
+                "sha256:b49f8c8898c55eaec9f71f1342f3fcacc9560d67a08ce5f35fbfb84e8dacd3da"
+            ],
+            "markers": "python_version >= '3.9'",
+            "version": "==0.37.1"
+        },
         "grpcio": {
             "hashes": [
                 "sha256:046f868fb24229e67c38d20835383671a7399d72da024cd929829eea99b70873",
@@ -1417,6 +1425,15 @@
             ],
             "markers": "python_full_version >= '3.10.0' and python_full_version < '4.0.0'",
             "version": "==1.6.3"
+        },
+        "langchain-groq": {
+            "hashes": [
+                "sha256:890c099a55526bceafc3e696d123cb9d36464c6664a3ead34ae6e09e0d50caeb",
+                "sha256:a69bb8212b7a699f407c033bf41ca526db8de68f438d51a41740a72bf6dc09bf"
+            ],
+            "index": "pypi",
+            "markers": "python_full_version >= '3.10.0' and python_full_version < '4.0.0'",
+            "version": "==1.1.3"
         },
         "langchain-huggingface": {
             "hashes": [
