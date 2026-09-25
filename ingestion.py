@@ -6,11 +6,12 @@ from typing import Any, Dict, List
 import certifi
 from dotenv import load_dotenv
 from langchain_core.documents import Document
-from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_tavily import TavilyExtract, TavilyMap
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from backend.core import vectorstore
-from logger import Colors, log_error, log_header, log_info, log_success, log_warning
+from logger import (Colors, log_error, log_header, log_info, log_success,
+                    log_warning)
 
 load_dotenv()
 ssl_context = ssl.create_default_context(cafile=certifi.where())
